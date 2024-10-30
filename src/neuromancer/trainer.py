@@ -227,7 +227,11 @@ class Trainer:
         self.best_model = deepcopy(self.model.state_dict())
         self.multi_fidelity=multi_fidelity
         self.device = device
-
+        
+    def update_weights(self,  loss_per_point, adaptive_weights):    # a
+        new_weights = adaptive_weights * (1 + self._optimizer._get_hyper('learning_rate') * loss_per_point)
+        adaptive_weights.data = new_weights  # Update weights in-place
+        
     def train(self):
         """
         Optimize model according to train_metric and validate per-epoch according to eval_metric.
@@ -240,6 +244,7 @@ class Trainer:
 
                 self.model.train()
                 losses = []
+                adaptive_weights = self.init_weights.clone().requires_grad_(False)      #a     # added self.init_weights, added update_weights
                 for t_batch in self.train_data:
                     t_batch['epoch'] = i
                     t_batch = move_batch_to_device(t_batch, self.device)
@@ -248,12 +253,13 @@ class Trainer:
                     if self.multi_fidelity:
                         for node in self.model.nodes:
                             alpha_loss = node.callable.get_alpha_loss()
-                            output[self.train_metric] += alpha_loss
+                            output[self.train_metric] += adaptive_weights * alpha_loss
 
                     self.optimizer.zero_grad()
-                    output[self.train_metric].backward()
+                    output[self.train_metric].backward()    
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
                     self.optimizer.step()
+                    update_weights(output[self.train_metric].detach(), adaptive_weights) # a
                     losses.append(output[self.train_metric])
                     self.callback.end_batch(self, output)
 
