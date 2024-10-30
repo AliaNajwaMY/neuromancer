@@ -158,12 +158,15 @@ class PenaltyLoss(AggregateLoss):
         https://en.wikipedia.org/wiki/Penalty_method
     """
 
-    def __init__(self, objectives, constraints):
+    def __init__(self, objectives, constraints, init_weight):
         """
         :param objectives: (list (Objective)) list of neuromancer objective classes
         :param constraints: (list (Constraint)) list of neuromancer constraint classes
         """
         super().__init__(objectives, constraints)
+        self.init_weight = init_weight
+        self.adaptive_weights = self.init_weight.clone().requires_grad_(False)
+        
 
     def forward(self, input_dict):
         """
@@ -179,6 +182,11 @@ class PenaltyLoss(AggregateLoss):
         penalties = penalties_dict['penalty_loss']
         input_dict['loss'] = fx + penalties
         return input_dict
+
+    def update_weights(self, loss_per_point, learning_rate):
+        " update adaptive_weight with new data"
+        new_weights = self.adaptive_weight * (1 + learning_rate * loss_per_point)
+        self.adaptive_weight.data = new_weights  # Update weights in-place
 
 
 class BarrierLoss(PenaltyLoss):
