@@ -165,6 +165,7 @@ class Trainer:
         self,
         problem: Problem,
         train_data: torch.utils.data.DataLoader,
+        actual_train_data,
         dev_data: torch.utils.data.DataLoader = None,
         test_data: torch.utils.data.DataLoader = None,
         optimizer: torch.optim.Optimizer = None,
@@ -227,6 +228,7 @@ class Trainer:
         self.best_model = deepcopy(self.model.state_dict())
         self.multi_fidelity=multi_fidelity
         self.device = device
+        self.init_weights = torch.ones_like(actual_train_data) #added actual_train_data in the trainer file
         
     def update_weights(self,  loss_per_point, adaptive_weights):    # a
         new_weights = adaptive_weights * (1 + self._optimizer._get_hyper('learning_rate') * loss_per_point)
