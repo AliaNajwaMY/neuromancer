@@ -261,7 +261,7 @@ class Trainer:
                     output[self.train_metric].backward()    
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
                     self.optimizer.step()
-                    update_weights(output[self.train_metric].detach(), adaptive_weights) # a
+                    self.update_weights(output[self.train_metric].detach(), adaptive_weights) # a
                     losses.append(output[self.train_metric])
                     self.callback.end_batch(self, output)
 
