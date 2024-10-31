@@ -231,7 +231,7 @@ class Trainer:
         self.init_weights = torch.ones_like(actual_train_data) #added actual_train_data in the trainer file
         
     def update_weights(self,  loss_per_point, adaptive_weights):    # a
-        new_weights = adaptive_weights * (1 + self._optimizer._get_hyper('learning_rate') * loss_per_point)
+        new_weights = adaptive_weights * (1 + self.optimizer._get_hyper('learning_rate') * loss_per_point)
         adaptive_weights.data = new_weights  # Update weights in-place
         
     def train(self):
