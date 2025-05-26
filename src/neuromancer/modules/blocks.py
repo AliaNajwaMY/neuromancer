@@ -16,7 +16,13 @@ from neuromancer.modules.activations import soft_exp, SoftExponential, SmoothedR
 from neuromancer.modules.functions import bounds_clamp, bounds_scaling
 
 
-
+class growing_cos(nn.Module):
+    def forward(self, x):
+        return x * torch.cos(x)
+    
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
 
 class Block(nn.Module, ABC):
     """
@@ -528,7 +534,7 @@ class MLP_bounds(MLP):
         outsize,
         bias=True,
         linear_map=slim.Linear,
-        nonlin=SoftExponential,
+        nonlin=Swish,
         hsizes=[64],
         linargs=dict(),
         min=0.0,

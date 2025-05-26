@@ -16,7 +16,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 
 class LitDataModule(pl.LightningDataModule):
-    """
+    """ 
     A Neuromancer-specific class inheriting from PyTorch Lightning LightningDataModule
     This class converts a data_setup_function (which yields Neuromancer DictDatasets associated with a Neuromancer Problem)
     to a LightningDataModule such that it integrates with LitProblem and LitTrainer
@@ -102,6 +102,8 @@ class DictDataset(Dataset):
         assert len(set(lens)) == 1, 'Mismatched number of samples in dataset tensors'
         self.length = lens[0]
         self.name = name
+        # self.xmin = xmin
+        # self.xmax = xmax
 
     def __getitem__(self, i):
         """Fetch a single item from the dataset."""
@@ -118,6 +120,7 @@ class DictDataset(Dataset):
         batch = default_collate(batch)
         batch['name'] = self.name
         return batch
+    
 
 
 def _is_multisequence_data(data):

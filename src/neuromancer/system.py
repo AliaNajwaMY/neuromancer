@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 
+from neuromancer.dynamics import integrators
+
 
 class Node(nn.Module):
     """
@@ -164,10 +166,11 @@ class System(nn.Module):
                         graph.add_edge(pydot.Edge(src.name, dst.name, label=key))
                         unique_common_keys.add(key)
 
-        # build I/O and node loop connections
+        # build I/O and node loop connections 
         loop_keys = []
         init_keys = []
         previous_output_keys = []
+        
         for idx_node, node in enumerate(self.nodes):
             node_loop_keys = set(node.input_keys) & set(node.output_keys)
             loop_keys += node_loop_keys
@@ -189,7 +192,7 @@ class System(nn.Module):
                             graph.add_edge(pydot.Edge(src.name, node.name, label=key))
                             break
 
-        # build connections to the output of the system in a reversed order
+        # build connections to the output of the system in a reversed order 
         previous_output_keys = []
         for node in self.nodes[::-1]:
             for key in (set(node.output_keys) - set(previous_output_keys)):
@@ -252,6 +255,10 @@ class System(nn.Module):
         """
         return data
 
+    # need to print 10 of the output control for the one in between, different dataset?, maybe put this on the output
+    # need to check where does the neural network is evaluated
+
+    # edited 4/9/2025 into inputing faux data for extended computations of u
     def forward(self, input_dict):
         """
 
@@ -261,14 +268,29 @@ class System(nn.Module):
         :return: (dict: {str: Tensor}) data with outputs of nstep rollout of Node interactions
         """
         data = input_dict.copy()
-        nsteps = self.nsteps if self.nsteps is not None else data[self.nstep_key].shape[1]  # Infer number of rollout steps
+        nsteps = self.nsteps if self.nsteps is not None else data[self.nstep_key].shape[1]  # Infer number of rollout steps # what does this do exactly
         data = self.init(data)  # Set initial conditions of the system
-        for i in range(nsteps):
+
+        for i in range(nsteps): #nsteps here is the horizon size
             for node in self.nodes:
+
                 indata = {k: data[k][:, i] for k in node.input_keys}  # collect what the compute node needs from data nodes
-                outdata = node(indata)  # compute
+                outdata = node(indata)  # compute # how do i compute this on more data than i provided?
                 data = self.cat(data, outdata)  # feed the data nodes
-        return data  # return recorded system measurements
+
+        # need to reset the steps here
+
+        for node in self.nodes:
+            if hasattr(node.callable, 'block'):
+                if hasattr(node.callable.block, 'reset_step'):
+                    node.callable.block.reset_step()
+            # print(type(node.callable))
+                # print(node.block.reset_step())
+            
+
+        return data
+    
+    
 
     def freeze(self):
         """

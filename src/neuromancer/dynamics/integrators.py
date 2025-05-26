@@ -9,6 +9,8 @@ from torchdiffeq import odeint_adjoint as odeint
 import torchdiffeq
 import torchsde
 from abc import ABC, abstractmethod
+import random
+import numpy as np
 
 
 class Integrator(nn.Module, ABC):
@@ -202,13 +204,42 @@ class RK4(Integrator):
         """
         super().__init__(block=block, interp_u=interp_u, h=h)
 
+
     def integrate(self, x, *args):
         h = self.h
-        k1 = self.block(x, *args)                    # k1 = f(x_i, t_i)
+
+        k1 = self.block(x, *args)
         k2 = self.block(x + h*k1/2.0, *args)         # k2 = f(x_i + 0.5*h*k1, t_i + 0.5*h)
         k3 = self.block(x + h*k2/2.0, *args)         # k3 = f(x_i + 0.5*h*k2, t_i + 0.5*h)
         k4 = self.block(x + h*k3, *args)             # k4 = f(y_i + h*k3, t_i + h)
-        return x + h*(k1/6.0 + k2/3.0 + k3/3.0 + k4/6.0)
+        k1 = self.block(x, *args)                    # k1 = f(x_i, t_i)
+
+        if hasattr(self.block, 'update_step'):
+            self.block.update_step()
+        
+        z = x + h*(k1/6.0 + k2/3.0 + k3/3.0 + k4/6.0)
+        # print(z.shape)
+        return z
+
+
+class dummy_RK4(Integrator):
+    def __init__(self, block, interp_u=None, h=1.0):
+        """
+
+        :param block: (nn.Module) A state transition model.
+        :param h: (float) integration step size
+        """
+        super().__init__(block=block, interp_u=interp_u, h=h)
+
+
+    def integrate(self, x, *args):
+        x = self.block(x, *args)
+        self.block.update_step()
+
+        x_reshaped = torch.reshape(x, (1, -1))
+        return x_reshaped
+        # return 10 * torch.sin(torch.pi * x)
+
 
 
 class RK4_Trap(Integrator):

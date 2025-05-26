@@ -435,3 +435,9 @@ class ODE_Autonomous(EmulatorBase):
 
 
 
+class PDE():
+    """
+    base class autonomous ODE
+    """
+# do i even need this?
+

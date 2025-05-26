@@ -194,20 +194,51 @@ class Problem(nn.Module):
         assert num_unique == num_obj, \
             "All nodes, objectives and constraints must have unique names to construct a computational graph."
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    # edited 4/9/2025 into inputing faux data for extended computations of u
+    def forward(self, data: Dict[str, torch.Tensor], data_faux=None):
         output_dict = self.step(data)
         output_dict = self.loss(output_dict)
         if isinstance(output_dict, torch.Tensor):
             output_dict = {self.loss.name: output_dict}
-        return {f'{data["name"]}_{k}': v for k, v in output_dict.items()}
+        # print(output_dict)
 
-    def step(self, input_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+       
+        return {f'{data["name"]}_{k}': v for k, v in output_dict.items()}
+    
+    # edited 4/9/2025 into inputing faux data for extended computations of u
+    def step(self, input_dict: Dict[str, torch.Tensor], input_dict_faux=None): # -> Dict[str, torch.Tensor]:
+
         for node in self.nodes:
             output_dict = node(input_dict)
             if isinstance(output_dict, torch.Tensor):
                 output_dict = {node.name: output_dict}
+            # print(f'input_dict={input_dict}')
+            # print(f'output_dict={output_dict}')
             input_dict = {**input_dict, **output_dict}
+
+        # input_data_faux needs to be the first 100 from the first point, check # r amount here
+
+        # TREAT FAUX_DATA AS DEV_DATA
+        # if input_dict_faux is not None:
+        #     for node in self.nodes:
+        #         output_dict_faux = node(input_dict_faux)
+        #         if isinstance(output_dict_faux, torch.Tensor):
+        #             output_dict_faux = {node.name: output_dict_faux}
+        #         print(node)
+        #         print(f'input_dict_faux={input_dict_faux}')
+        #         print(f'output_dict_faux={output_dict_faux}')
+        #         input_dict_faux = {**input_dict_faux, **output_dict_faux}
+        #     # need to check if what im computing is correct? 
+        #     print(input_dict_faux)
+        #     return input_dict, input_dict_faux
+        
+        # else:
+        #     return input_dict
+
         return input_dict
+
+        
+        
 
     def graph(self, include_objectives=True):
         self._check_unique_names()

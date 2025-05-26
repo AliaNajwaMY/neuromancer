@@ -165,7 +165,6 @@ class Trainer:
         self,
         problem: Problem,
         train_data: torch.utils.data.DataLoader,
-        actual_train_data,
         dev_data: torch.utils.data.DataLoader = None,
         test_data: torch.utils.data.DataLoader = None,
         optimizer: torch.optim.Optimizer = None,
@@ -183,7 +182,8 @@ class Trainer:
         eval_mode="min",
         clip=100.0,
         multi_fidelity=False,
-        device="cpu"
+        device="cpu",
+        faux_data = None
     ):
         """
 
@@ -228,11 +228,14 @@ class Trainer:
         self.best_model = deepcopy(self.model.state_dict())
         self.multi_fidelity=multi_fidelity
         self.device = device
-        self.init_weights = torch.ones_like(actual_train_data) #added actual_train_data in the trainer file
-        
+        self.init_weights = torch.ones_like(train_data.dataset.datadict['x']) #added actual_train_data in the trainer file
+        self.faux_data = faux_data
+
+
     def update_weights(self,  loss_per_point, adaptive_weights):    # a
-        new_weights = adaptive_weights * (1 + self.optimizer.get_last_lr() * loss_per_point)
+        new_weights = adaptive_weights * (1 + self.optimizer.param_groups[-1]['lr'] * loss_per_point)
         adaptive_weights.data = new_weights  # Update weights in-place
+
         
     def train(self):
         """
@@ -246,42 +249,46 @@ class Trainer:
 
                 self.model.train()
                 losses = []
-                adaptive_weights = self.init_weights.clone().requires_grad_(False)      #a     # added self.init_weights, added update_weights
-                for t_batch in self.train_data:
-                    t_batch['epoch'] = i
-                    t_batch = move_batch_to_device(t_batch, self.device)
-                    output = self.model(t_batch)
+                adaptive_weights = self.init_weights.clone().requires_grad_(False).to(self.device)      #a     # added self.init_weights, added update_weights
 
-                    if self.multi_fidelity:
-                        for node in self.model.nodes:
-                            alpha_loss = node.callable.get_alpha_loss()
-                            output[self.train_metric] += adaptive_weights * alpha_loss
+                for t_batch in self.train_data: # maybe we need to do the same for faux_data?
+                        t_batch['epoch'] = i
+                        t_batch = move_batch_to_device(t_batch, self.device)
+                        output = self.model(t_batch)
+                        if self.multi_fidelity:
+                            for node in self.model.nodes:
+                                alpha_loss = node.callable.get_alpha_loss()
+                                output[self.train_metric] += adaptive_weights * alpha_loss
+                        self.optimizer.zero_grad()
+                        # output[self.train_metric] = torch.tensor(output[self.train_metric], requires_grad=True) # 1/1/25
+                        output[self.train_metric].backward()    
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+                        self.optimizer.step()
+                        # self.update_weights(output[self.train_metric].detach(), adaptive_weights) # a
+                        losses.append(output[self.train_metric])
+                        self.callback.end_batch(self, output)
 
-                    self.optimizer.zero_grad()
-                    output[self.train_metric].backward()    
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-                    self.optimizer.step()
-                    self.update_weights(output[self.train_metric].detach(), adaptive_weights) # a
-                    losses.append(output[self.train_metric])
-                    self.callback.end_batch(self, output)
+                # try to push for training on the real thing 
 
                 output[f'mean_{self.train_metric}'] = torch.mean(torch.stack(losses))
+                # print(output) ##
                 self.callback.begin_epoch(self, output)
 
                 if self.lr_scheduler is not None:
-                    self.lr_scheduler.step(output[f'mean_{self.train_metric}'])
+                    self.lr_scheduler.step(output[f'mean_{self.train_metric}']) # need to find a way to input faux_data here
 
                 with torch.set_grad_enabled(self.model.grad_inference):
                     self.model.eval()
                     if self.dev_data is not None:
                         losses = []
-                        for d_batch in self.dev_data:
+                        for d_batch in self.dev_data: 
                             d_batch = move_batch_to_device(d_batch, self.device)
                             eval_output = self.model(d_batch)
-                            losses.append(eval_output[self.dev_metric])
-                        eval_output[f'mean_{self.dev_metric}'] = torch.mean(torch.stack(losses))
                         output = {**output, **eval_output}
                     self.callback.begin_eval(self, output)  # Used for alternate dev evaluation
+                    
+
+                    # check if i can save this data from evaluation?
 
                     if (self._eval_min and output[self.eval_metric] < self.best_devloss)\
                             or (not self._eval_min and output[self.eval_metric] > self.best_devloss):
@@ -297,6 +304,16 @@ class Trainer:
                         mean_loss = output[f'mean_{self.train_metric}']
                         if i % (self.epoch_verbose) == 0:
                             print(f'epoch: {i}  {self.train_metric}: {mean_loss}')
+                            # print(f'a grad ={float(a.value.grad)}, b grad ={float(b.value.grad)}, c grad={float(c.value.grad)}')
+                            # print(f'a ={float(a.value)}, b ={float(b.value)}, c ={float(c.value)}')
+                            # print(f'y_hat ={y_hat.value[0]}')
+
+                        # if params is not None:
+                            # print(params[6].grad)
+                            
+                    
+                            
+
 
                     self.callback.end_eval(self, output)  # visualizations
 
@@ -321,6 +338,8 @@ class Trainer:
                 "best_model.pth": self.model,
             })
         return self.best_model
+
+        
 
     def test(self, best_model):
         """
